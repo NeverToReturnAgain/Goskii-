@@ -1,0 +1,176 @@
+package com.rj.bd.register;
+
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.sql.SQLException;
+
+import javax.mail.MessagingException;
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import com.rj.bd.utils.CodeUtils;
+import com.rj.bd.utils.EmailUtils;
+
+/**
+ * @desc 用户注册过程以及注册完成返回登录界面(C层)
+ * @author dell
+ * @time 2019年12月21日
+ */
+@SuppressWarnings("serial")
+@WebServlet(urlPatterns = "/Skiings/register.do")
+public class RegisterServlet extends HttpServlet {
+
+	RegisterService register = new RegisterServiceImpl();
+	public String sendCode = "";
+
+	@Override
+	protected void service(HttpServletRequest request, HttpServletResponse response)
+			throws ServletException, IOException {
+
+		String method = request.getParameter("method");
+			System.out.println("method:"+method);
+		try {
+			if (method.equals("registerPage")) {// 转到注册页面
+				this.registerPage(request, response);
+			} else if (method.equals("sendKeyCode")) {// 发送验证码
+				this.sendKeyCode(request, response);
+			} else if (method.equals("verKeyCode")) {// 验证码正误判断,全拼:Verification
+														// code error
+				this.verKeyCode(request, response);
+			} else if (method.equals("addUser")) {// 添加用户过程
+				this.addUser(request, response);
+			} else if (method.equals("userPresence")) {// 判断是否存在用户,不存在才能添加
+				this.userPresence(request, response);
+			}
+			else if (method.equals("contact")) {// 判断是否存在用户,不存在才能添加
+				this.contact(request, response);
+			}
+			} catch (ClassNotFoundException e) {
+
+			e.printStackTrace();
+		} catch (SQLException e) {
+
+			e.printStackTrace();
+		} catch (MessagingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	/**
+	 * @desc PC端的联系我们
+	 * @param request
+	 * @param response
+	 * @throws MessagingException 
+	 * @throws UnsupportedEncodingException 
+	 */
+	private void contact(HttpServletRequest request, HttpServletResponse response) throws UnsupportedEncodingException, MessagingException {
+		System.out.println("进入了PC端的联系我们");
+		String name = request.getParameter("name");
+		String Email = request.getParameter("Email");
+		String Subject = request.getParameter("Subject");
+		String message = request.getParameter("message");
+		String receiveEmail = "1652185936@qq.com";
+		EmailUtils.createMimeMessage(request, receiveEmail, name, Subject, message,Email);
+	}
+
+	private void userPresence(HttpServletRequest request, HttpServletResponse response)
+			throws ClassNotFoundException, SQLException, IOException {
+		String user_mail = request.getParameter("user_mail");
+		if (register.userPresenceJudgment(user_mail)) {// 判断用户是否存在,存在则返回true
+			response.getWriter().write("用户已经存在");
+		}
+
+	}
+
+	/**
+	 * @desc 验证码正误判断,正确则添加到库,错误返回
+	 * @param request
+	 * @param response
+	 */
+	private void verKeyCode(HttpServletRequest request, HttpServletResponse response) {
+		// 承接跳转验证码页面的第2步
+		// 3.<获取前台发送的验证码>
+		// 3.1.提示代码:<String keycode = request.getParameter("keycode");>//验证码
+		// [目前为null]
+		// 4.<判断获取到的验证码是否与发送的一致,如果不一致,返回给前台:[验证码错误],如果一致执行下一步>
+		// 5.<把用户[邮箱,密码]添加到数据库中>
+		// 5.1.提示代码:<register.addUserToDatabase(user_mail,user_pwd);>//添加到库中
+
+	}
+
+	/**
+	 * @desc 发送验证码
+	 * @param request
+	 * @param response
+	 * @throws MessagingException
+	 * @throws IOException
+	 * @throws SQLException
+	 * @throws FileNotFoundException
+	 * @throws ClassNotFoundException
+	 */
+	private void sendKeyCode(HttpServletRequest request, HttpServletResponse response)
+			throws MessagingException, ClassNotFoundException, FileNotFoundException, SQLException, IOException {
+		String receiveEmail = request.getParameter("user_mail");
+
+		if (register.userPresenceJudgment(receiveEmail)) {// 判断用户是否存在,存在则终止
+			response.getWriter().write("用户已经存在");
+			return;
+		}
+
+		String code = CodeUtils.createCode(6);// 生成6位验证码
+		EmailUtils.createMimeMessage(request, receiveEmail, code);
+		this.sendCode = code;
+
+	}
+
+	/**
+	 * @desc 跳转到注册的界面
+	 * @param request
+	 * @param response
+	 * @throws IOException
+	 */
+	private void registerPage(HttpServletRequest request, HttpServletResponse response) throws IOException {
+
+		response.getWriter().write("registerPage");
+	}
+
+	/**
+	 * @desc 获取到邮箱和密码并添加到数据库中,添加完成后返回到注册界面
+	 * @param request
+	 * @param response
+	 * @throws IOException
+	 * @throws SQLException
+	 * @throws FileNotFoundException
+	 * @throws ClassNotFoundException
+	 * @throws MessagingException
+	 */
+	private void addUser(HttpServletRequest request, HttpServletResponse response)
+			throws ClassNotFoundException, FileNotFoundException, SQLException, IOException, MessagingException {
+		String user_mail = request.getParameter("user_mail");// 邮箱
+
+		if (register.userPresenceJudgment(user_mail)) {// 判断用户是否存在,存在则终止
+			response.getWriter().write("用户已经存在");
+			return;
+		}
+
+		String code = request.getParameter("code");
+		code = code.toUpperCase();
+
+		String user_pwd = request.getParameter("user_pwd");// 密码
+		// if(user_mail==null || user_pwd==null) return;//非空验证,如果为空直接返回,不做操作
+		// register.addUserToDatabase(user_mail,user_pwd);//添加到库中[现在仅仅是没有验证码的阶段,所以直接添加到库]
+		if (!sendCode.equals(code)) {
+			response.getWriter().write("false");
+			System.out.println("验证码错误");
+			return;
+		}
+		register.addUserToDatabase(user_mail, user_pwd);// 存库
+		response.getWriter().write("loginPage");
+
+	}
+
+}

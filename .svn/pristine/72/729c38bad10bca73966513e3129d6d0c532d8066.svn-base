@@ -1,0 +1,321 @@
+package com.rj.bd.user;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetAddress;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLConnection;
+import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.UUID;
+
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.Cookie;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+
+import org.apache.commons.fileupload.FileItem;
+import org.apache.commons.fileupload.FileUploadException;
+import org.apache.commons.fileupload.disk.DiskFileItemFactory;
+import org.apache.commons.fileupload.servlet.ServletFileUpload;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+
+import com.rj.bd.utils.ImgPeration;
+import com.rj.bd.utils.ToJson;
+
+import net.sf.json.JSONArray;
+import net.sf.json.JSONObject;
+
+@SuppressWarnings("serial")
+@WebServlet(urlPatterns="/Skiings/user.do")
+public class UserServlet extends HttpServlet {
+	IUserService userService = new UserServiceImpl();
+	HttpSession session;
+
+	@Override
+	protected void service(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+
+		try {
+			String method = request.getParameter("method");
+			System.out.println("method:"+method);
+			if(method.equals("queryForUserMessage")){
+				this.queryForUserMessage(request,response);
+			}
+			else if(method.equals("editMessage")){
+				this.editMessage(request,response);
+			}
+//			else if(method.equals("download")){ // 因为下载方法的实质和查询相同所以直接使用查询方法
+//				this.download(request,response);
+//			}
+			else if(method.equals("imgEdit")){
+				this.imgEdit(request,response);
+			}else if (method.equals("updateUserInfo")) {
+				this.updateUserInfo(request, response);
+			}
+		} catch (ClassNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (FileUploadException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+	}
+	
+	
+	/**
+	 * @desc 修改用户信息
+	 * @param request
+	 * @param response
+	 * @throws FileUploadException
+	 * @throws IOException
+	 * @throws SQLException 
+	 * @throws ClassNotFoundException 
+	 */
+	private void updateUserInfo(HttpServletRequest request, HttpServletResponse response)
+			throws FileUploadException, IOException, ClassNotFoundException, SQLException {
+		
+		String listName=UUID.randomUUID().toString()+".jpg";
+		String imgpath = request.getServletContext().getRealPath("/") + "WEB-INF/files";
+		
+		//调用img工具类中的base64流存储
+		ImgPeration.imgSave(request.getParameter("imgBase64Data"),imgpath + listName);
+//		String listName = ImgPeration.imgSave(request,response).split(",")[0];//以file方式保存图片文件
+
+		
+		listName = "http://" +InetAddress.getLocalHost().getHostAddress() + ":"+request.getServerPort() + request.getContextPath() + "/Skiings/returnimg.do?imgname=" + listName;
+		
+		
+		String user_name = request.getParameter("user_name");
+		String user_motto = request.getParameter("user_motto");
+		String user_mail = request.getParameter("user_mail");
+		userService.updateUserInfo(listName,user_name,user_motto,user_mail,request);
+	}
+	
+	
+	
+	/**
+	 * @desc  修改背景图片
+	 * @param request
+	 * @param response
+	 * @throws FileUploadException
+	 * @throws IOException
+	 * @throws SQLException 
+	 * @throws ClassNotFoundException 
+	 */
+	private void imgEdit(HttpServletRequest request, HttpServletResponse response) throws FileUploadException, IOException, ClassNotFoundException, SQLException {
+		response.setContentType("text/html;charset=utf-8");
+		String user_mail = request.getParameter("user_mail");
+		String user_img = request.getParameter("user_img");
+		
+		
+		String fileSaveName = null; //图片保存的名字
+		List<FileItem> formItemsList = null;
+		//设定图片保存在服务器上的路径
+		String path = this.getServletContext().getRealPath("/")+"WEB_INF/bgimage";
+		System.out.println("图片存储路径："+path);
+		//根据路径名创建一个File实例，其目的是创建一个存储图片的路径
+		File file = new File(path);
+		if(!file.exists()){
+			System.out.println("正在创建目录");
+			file.mkdir();
+		}
+		//将ruquest对象在factory工厂中最终变成FileItem
+		DiskFileItemFactory factory = new DiskFileItemFactory();
+		
+		//使用ServletFileUpload(文件上传)解析器解析上传数据，
+		//解析结果返回的是一个List<FileItem>集合，每一个FileItem对应一个Form表单的输入项
+		ServletFileUpload upload = new ServletFileUpload(factory);
+		
+		//获取解析结果的list
+		formItemsList = upload.parseRequest(request);
+		if(formItemsList!=null &&formItemsList.size()>0){
+			for (FileItem fileItem : formItemsList) {
+				if(!fileItem.isFormField()){
+					String fileName = fileItem.getName();//获取文件的全名
+					String prefix =fileName.substring(fileName.lastIndexOf(".")+1); //获取后缀名
+					System.out.println("获取后缀名");
+					//随机生成图片的名字
+					String id = UUID.randomUUID().toString();
+					fileSaveName = id+"."+prefix;
+					//调用fileUtils工具类的方法
+					FileUtils.copyInputStreamToFile(fileItem.getInputStream(), new File(path+"/"+fileSaveName));	
+				}
+			} 
+		}
+		//调用M层的方法实现将修改后的信息保存到数据库
+		userService.saveimgEdit(user_mail,fileSaveName);
+		
+	}
+//	/**
+//	 * @desc  图片路径的响应   和通过查询一样
+//	 * @param request
+//	 * @param response
+//	 * @throws SQLException 
+//	 * @throws ClassNotFoundException 
+//	 */
+//	private void download(HttpServletRequest request, HttpServletResponse response) throws IOException, ClassNotFoundException, SQLException {
+//		//接值
+//		String user_mail = request.getParameter("user_mail");
+//		//通過当前的user_mial 去查找到他本人的头像
+//		queryForUserMessage
+		
+//		String user_img=request.getParameter("user_img");
+//	try {
+		
+//		String path = this.getServletContext().getRealPath("/") + "WEB-INF/image/";
+//		System.out.println("当前图片的路径"+path);
+//		String src = path+user_img;
+	//	response.getWriter().write(src);
+//		File file=new File(path+user_img);
+//		FileInputStream fileInputStream=new FileInputStream(file);
+//		response.setContentType("image/jpg"); //设置返回的文件类型   
+//		response.setHeader("Access-Control-Allow-Origin", "*");//设置该图片允许跨域访问
+//		IOUtils.copy(fileInputStream, response.getOutputStream());
+//	} 
+//	catch (FileNotFoundException e) 
+//	{
+////		String path = this.getServletContext().getRealPath("/") + "WEB-INF/image/默认.jpg";
+////		File file=new File(path);
+////		FileInputStream fileInputStream=new FileInputStream(file);
+////		System.out.println("fileInputStream----->"+fileInputStream);
+////		response.setContentType("image/jpg"); //设置返回的文件类型   
+////		response.setHeader("Access-Control-Allow-Origin", "*");//设置该图片允许跨域访问
+////		IOUtils.copy(fileInputStream, response.getOutputStream());
+//		outSiderImage(request,response);
+//	}
+	//转向
+	
+//}
+	/**
+	 * @desc  外联一个默认图片
+	 * @param request
+	 * @param response
+	 * @throws IOException 
+	 */
+	private void outSiderImage(HttpServletRequest request, HttpServletResponse response) throws IOException {
+		String imgUrl = "http://pic2.sc.chinaz.com/files/pic/pic9/201911/zzpic21383.jpg";
+		URL url = new URL(imgUrl);
+		URLConnection conn = url.openConnection();//打开与外链图片的连接
+		InputStream inputStream = conn.getInputStream();
+		response.setContentType("image/jpg");
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		IOUtils.copy(inputStream, response.getOutputStream());
+	}
+	/**
+	 * @desc  修改信息（不包括背景图片）
+	 * @param request
+	 * @param response
+	 * @throws FileUploadException 
+	 * @throws IOException 
+	 * @throws SQLException 
+	 * @throws ClassNotFoundException 
+	 */
+	private void editMessage(HttpServletRequest request, HttpServletResponse response) throws FileUploadException, IOException, ClassNotFoundException, SQLException {
+			//设置编码和格式
+			response.setContentType("text/html;charset=utf-8");
+			//获取要修改的值
+			String user_mail = request.getParameter("user_mail");
+			String user_name = request.getParameter("user_name");
+			String user_motto = request.getParameter("user_motto");
+			String user_sex = request.getParameter("user_sex");
+			String user_address = request.getParameter("user_address");
+			String[] user_photo = request.getParameterValues("user_photo");
+			
+			//背景图片单独修改
+//			String user_img = request.getParameter("user_img");
+			//定义变量
+			String fileSaveName = null; //图片保存的名字
+			List<FileItem> formItemsList = null;
+			//设定图片保存在服务器上的路径
+			String path = this.getServletContext().getRealPath("/")+"WEB-INF/image";
+			System.out.println("图片存储路径："+path);
+			//根据路径名创建一个File实例，其目的是创建一个存储图片的路径
+			File file = new File(path);
+			if(!file.exists()){
+				file.mkdir();
+			}
+			//将ruquest对象在factory工厂中最终变成FileItem
+			DiskFileItemFactory factory = new DiskFileItemFactory();
+			
+			//使用ServletFileUpload(文件上传)解析器解析上传数据，
+			//解析结果返回的是一个List<FileItem>集合，每一个FileItem对应一个Form表单的输入项
+			ServletFileUpload upload = new ServletFileUpload(factory);
+			System.out.println("upload::"+upload);
+			
+			//获取解析结果的list
+			formItemsList = upload.parseRequest(request);
+			System.out.println("测验的数据的长度："+formItemsList.size());
+			if(formItemsList!=null &&formItemsList.size()>0){
+				for (FileItem fileItem : formItemsList) {
+					if(!fileItem.isFormField()){
+						String fileName = fileItem.getName();//获取文件的全名
+						String prefix =fileName.substring(fileName.lastIndexOf(".")+1); //获取后缀名
+//						System.out.println("获取的后缀名："+prefix);
+						//随机生成图片的名字
+						String id = UUID.randomUUID().toString();
+						fileSaveName = id+"."+prefix;
+						//调用fileUtils工具类的方法
+						FileUtils.copyInputStreamToFile(fileItem.getInputStream(), new File(path+"/"+fileSaveName));	
+					}
+				} 
+			}
+			//调用M层的方法实现将修改后的信息保存到数据库
+//			userService.saveEdit(user_mail,user_name,user_motto,user_sex,user_address,fileSaveName);
+			response.sendRedirect(request.getContextPath()+"/Skiings/user.do?method=queryForUserMessage&user_mail="+user_mail);
+	}
+	
+	/**
+	 * @desc  查詢个人信息
+	 * @param request
+	 * @param response
+	 * @throws SQLException 
+	 * @throws ClassNotFoundException 
+	 * @throws IOException 
+	 * @throws ServletException 
+	 */
+	private  void queryForUserMessage(HttpServletRequest request, HttpServletResponse response) throws ClassNotFoundException, SQLException, IOException, ServletException {
+		//获取当前的登录信息
+//		System.out.println("进入了当前方法");
+		
+		String user_mail = request.getParameter("user_mail");
+		System.out.println("当前的user_mail:"+user_mail);
+//		System.out.println("user_mail：："+user_mail);
+		//通过邮箱从数据库查询数据
+		Map<String,Object> user_map = userService.queryForUserMessageByTel(user_mail);
+//		System.out.println("输出的user_map:"+user_map);
+		
+		//调用工具类中的方法使map里的数据转为json格式 然后响应给前台
+		JSONObject json = ToJson.MapToJson(user_map);
+//		response.getWriter().write(json);
+		System.out.println(json.toString());
+		response.getWriter().print(json);	
+		
+//		Cookie cookie =new Cookie("user_map",json);
+//		response.addCookie(cookie);
+		
+//		request.setAttribute("data", json);
+//		System.out.println("json格式的数据："+json);
+		
+		//转向
+		
+//		request.getRequestDispatcher("/tupian.jsp").forward(request, response);
+		
+	}
+
+}
