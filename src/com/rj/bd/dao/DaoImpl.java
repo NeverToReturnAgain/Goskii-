@@ -27,8 +27,8 @@ public class DaoImpl implements Dao{
 	
 	
 	private String sDBDriver = "org.gjt.mm.mysql.Driver";
-	private String sConnStr = "jdbc:mysql://10.2.32.1:3306/goskiing?&characterEncoding=utf-8";
-    private String username = "root";  //登录数据库用户名
+	private String sConnStr = "jdbc:mysql://106.53.18.184:3306/Goskiings?&characterEncoding=utf-8";
+    private String username = "Goskiings";  //登录数据库用户名
     private String password = "root";   //登录数据库密码
     
     

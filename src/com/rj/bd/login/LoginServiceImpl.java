@@ -17,7 +17,7 @@ Dao dao = new DaoImpl();
 	@Override
 	public Map<String, Object> queryForMessage(String user_mail, String user_pwd)
 			throws ClassNotFoundException, SQLException {
-		String sql = "select * from LoginMessage where user_mail=? and user_pwd=?";
+		String sql = "select * from loginmessage where user_mail=? and user_pwd=?";
 		int[] types = new int[2];
 		types[0] = Types.VARCHAR;
 		types[1] = Types.VARCHAR;
